@@ -114,19 +114,31 @@ def t_STRING(t):
     # Si es palabra reservada, cambia tipo y valor
     if t.value in reserved:
         t.type = reserved[t.value]
-        t.value = t.type  # O si prefieres, t.value = t.value.strip('"')
+        t.value = t.type 
     return t
 
 t_ignore = ' \t\n'
 
+def find_column(input, token):
+    last_cr = input.rfind('\n', 0, token.lexpos)
+    if last_cr < 0:
+        last_cr = -1
+    return token.lexpos - last_cr
+
+def t_INVALID(t):
+    r'[^\s{}\[\],:"\n\t]+'
+    col = find_column(t.lexer.lexdata, t)
+    print(f"Error léxico: token ilegal '{t.value}' en línea {t.lineno}, columna {col}")
+
+
 def t_error(t):
-    print(f"Caracter ilegal '{t.value[0]}'")
+    col = find_column(t.lexer.lexdata, t)
+    print(f"Error léxico (residual): carácter ilegal '{t.value[0]}' en línea {t.lineno}, columna {col}")
     t.lexer.skip(1)
 
+
 lexer = lex.lex()
-
-
-
+ 
 print(f"¿Desea analizar Léxicamente un string o un archivo?")
 
 def mostrar_menu():
