@@ -192,15 +192,34 @@ def p_integrante_atributos_nt(p):
     '''integrante_atributos_nt : nombre_integrante_nt COMA EDAD DOSPUNTOS INTEGER COMA cargo_nt COMA FOTO DOSPUNTOS URL COMA CORREO_EMAIL DOSPUNTOS EMAIL COMA HABILIDADES DOSPUNTOS STRING COMA SALARIO DOSPUNTOS FLOAT COMA ACTIVO DOSPUNTOS BOOLEAN
                               | nombre_integrante_nt COMA cargo_nt COMA FOTO DOSPUNTOS URL COMA CORREO_EMAIL DOSPUNTOS EMAIL COMA HABILIDADES DOSPUNTOS STRING COMA SALARIO DOSPUNTOS FLOAT COMA ACTIVO DOSPUNTOS BOOLEAN'''
     integrante = {}
+
     for item in p[1:]:
         if isinstance(item, dict):
             integrante.update(item)
-    # Sobreescritura por índices (si existen)
-    for i, name in [(3, "edad"), (13, "foto"), (15, "email"), (17, "habilidades"), (19, "salario"), (21, "activo")]:
-        if len(p) > i:
-            integrante[name] = p[i]
+
+    # Verificar si el campo "edad" está presente
+    for i in range(1, len(p) - 1):
+        if isinstance(p[i], str) and p[i].lower() == '"edad"' and i+2 < len(p):
+            integrante["edad"] = p[i + 2]
+
+    # Verificar si alguno de los campos obligatorios no fue capturado por subreglas
+    posibles = {
+        '"foto"': "foto",
+        '"email"': "email",
+        '"habilidades"': "habilidades",
+        '"salario"': "salario",
+        '"activo"': "activo"
+    }
+
+    for i in range(1, len(p) - 2):
+        if isinstance(p[i], str) and p[i] in posibles:
+            clave = posibles[p[i]]
+            valor = p[i + 2]
+            if clave not in integrante:
+                integrante[clave] = valor
+
     p[0] = integrante
-    print("[DEBUG] Entrando a integrante_atributos_nt")
+    print("[DEBUG] Entrando a integrante_atributos_nt:", integrante)
 
 def p_nombre_integrante_nt(p):
     'nombre_integrante_nt : NOMBRE DOSPUNTOS NOMBREPROPIO'
@@ -262,20 +281,6 @@ def p_proyecto_nt(p):
     p[0] = p[2]
     print("[DEBUG] Entrando a proyecto_nt")
 
-def p_proyecto_atributos_nt(p):
-    'proyecto_atributos_nt : NOMBRE DOSPUNTOS STRING COMA estado_kv COMA RESUMEN DOSPUNTOS STRING COMA tareas_nt COMA FECHA_INICIO DOSPUNTOS DATE COMA FECHA_FIN DOSPUNTOS DATE COMA VIDEO DOSPUNTOS URL COMA CONCLUSION DOSPUNTOS STRING'
-    p[0] = {
-        "nombre": p[3],
-        "estado": p[5]["estado"],
-        "resumen": p[8],
-        "tareas": p[10],
-        "fecha_inicio": p[13],
-        "fecha_fin": p[16],
-        "video": p[19],
-        "conclusion": p[22]
-    }
-    print("[DEBUG] Entrando a proyecto_atributos_nt")
-
 def p_tareas_nt(p):
     'tareas_nt : TAREAS DOSPUNTOS ICORCHETE tarea_list_nt DCORCHETE'
     p[0] = p[4]
@@ -298,50 +303,71 @@ def p_tarea_nt(p):
     p[0] = p[2]
     print("[DEBUG] Entrando a tarea_nt")
 
+def p_proyecto_atributos_nt(p):
+    '''proyecto_atributos_nt : NOMBRE DOSPUNTOS STRING COMA estado_kv COMA RESUMEN DOSPUNTOS STRING COMA tareas_nt COMA FECHA_INICIO DOSPUNTOS valor_fecha COMA FECHA_FIN DOSPUNTOS valor_fecha COMA VIDEO DOSPUNTOS URL COMA CONCLUSION DOSPUNTOS STRING'''
+    proyecto = {
+        "nombre": p[3],
+        "estado": p[5]["estado"],
+        "resumen": p[9],
+        "tareas": p[11],
+        "fecha_inicio": p[15],
+        "fecha_fin": p[19],
+        "video": p[23],
+        "conclusion": p[27]
+    }
+    p[0] = proyecto
+    print("[DEBUG] Entrando a proyecto_atributos_nt:", proyecto)
+
+def p_valor_fecha(p):
+    '''valor_fecha : DATE
+                   | NULL'''
+    p[0] = p[1]
+
 def p_tarea_atributos_nt(p):
     '''tarea_atributos_nt : tarea_atributo_list_nt'''
     tarea = {}
     for item in p[1]:
         if isinstance(item, dict):
             tarea.update(item)
-        else:
-            raise Exception(f"Elemento inválido en atributos de tarea: {item}")
+
+    # Verificar campos requeridos
     obligatorios = {"nombre", "estado", "resumen"}
-    if not obligatorios.issubset(tarea.keys()):
-        raise Exception("Faltan campos obligatorios en Tarea (nombre, estado, resumen)")
+    faltan = obligatorios - tarea.keys()
+    if faltan:
+        raise Exception(f"Faltan campos obligatorios en Tarea: {', '.join(faltan)}")
+
     p[0] = tarea
-    print("[DEBUG] Entrando a tarea_atributos_nt")
+    print("[DEBUG] Entrando a tarea_atributos_nt:", tarea)
+
+
+
+def p_tarea_atributo(p):
+    '''tarea_atributo : NOMBRE DOSPUNTOS STRING
+                      | RESUMEN DOSPUNTOS STRING
+                      | FECHA_INICIO DOSPUNTOS valor_fecha
+                      | FECHA_FIN DOSPUNTOS valor_fecha
+                      | estado_kv'''
+    key = str(p[1]).strip('"').lower()
+    if isinstance(p[1], dict):
+        p[0] = p[1]  # estado_kv devuelve dict directamente
+    elif key == "nombre":
+        p[0] = {"nombre": p[3]}
+    elif key == "resumen":
+        p[0] = {"resumen": p[3]}
+    elif key == "fecha_inicio":
+        p[0] = {"fecha_inicio": p[3]}
+    elif key == "fecha_fin":
+        p[0] = {"fecha_fin": p[3]}
+    else:
+        p[0] = {}
 
 def p_tarea_atributo_list_nt(p):
     '''tarea_atributo_list_nt : tarea_atributo COMA tarea_atributo_list_nt
                               | tarea_atributo'''
     if len(p) == 4:
-        return_list = [p[1]] + p[3]
+        p[0] = [p[1]] + p[3]
     else:
-        return_list = [p[1]]
-    p[0] = return_list
-
-def p_tarea_atributo(p):
-    '''tarea_atributo : NOMBRE DOSPUNTOS STRING
-                      | estado_kv
-                      | RESUMEN DOSPUNTOS STRING
-                      | FECHA_INICIO DOSPUNTOS DATE
-                      | FECHA_INICIO DOSPUNTOS NULL
-                      | FECHA_FIN DOSPUNTOS DATE
-                      | FECHA_FIN DOSPUNTOS NULL'''
-    key = str(p[1]).strip('"').lower()
-    if len(p) == 4 and key == "nombre":
-        p[0] = {"nombre": p[3]}
-    elif len(p) == 4 and key == "resumen":
-        p[0] = {"resumen": p[3]}
-    elif len(p) == 4 and key == "fecha_inicio":
-        p[0] = {"fecha_inicio": p[3]}
-    elif len(p) == 4 and key == "fecha_fin":
-        p[0] = {"fecha_fin": p[3]}
-    elif isinstance(p[1], dict):  # estado_kv
-        p[0] = p[1]
-    else:
-        raise Exception(f"Elemento inválido en tarea_atributo: {p[1]}")
+        p[0] = [p[1]]
 
 def p_estado_kv(p):
     'estado_kv : ESTADO DOSPUNTOS estado_val'

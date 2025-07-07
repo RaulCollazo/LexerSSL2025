@@ -26,22 +26,61 @@ def analizar_parser(texto):
     parser_result = None
     try:
         import builtins
+        import json
+        import os
+
         original_print = print
+
         def print_to_console(*args, **kwargs):
             message = " ".join(str(a) for a in args)
             console_output.append(message)
+
         builtins.print = print_to_console
 
+        # Ejecutar parser
         parser_result = parser.parse(texto, lexer=lexer)
 
         builtins.print = original_print
 
+        # Preparar mensaje de consola
         if console_output:
-            return "Parseo exitoso.\n\n" + "\n".join(console_output)
+            resultado_parser = "Parseo exitoso.\n\n" + "\n".join(console_output)
         else:
-            return "Parseo exitoso."
+            resultado_parser = "Parseo exitoso."
+
+        # Mostrar contenido parseado
+        resultado_parser += "\n\n[Resultado del Parser]\n"
+        resultado_parser += json.dumps(parser_result, indent=2, ensure_ascii=False)
+
+        # Función para limpiar comillas dobles de strings
+        def limpiar_parser_result(data):
+            if isinstance(data, dict):
+                return {k: limpiar_parser_result(v) for k, v in data.items()}
+            elif isinstance(data, list):
+                return [limpiar_parser_result(elem) for elem in data]
+            elif isinstance(data, str):
+                return data.strip('"')
+            else:
+                return data
+
+        # Limpiar el resultado antes de guardar
+        parser_result_limpio = limpiar_parser_result(parser_result)
+
+        # Ruta de guardado junto a main.py
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_path = os.path.join(script_dir, "salida_parser.json")
+
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(parser_result_limpio, f, indent=2, ensure_ascii=False)
+            print(f"✅ Diccionario guardado en: {output_path}")
+        except Exception as json_err:
+            print(f"❌ Error al guardar JSON: {json_err}")
+            print("Contenido del parser (fallido):", parser_result)
+
+        return resultado_parser
+
     except Exception as e:
-        import builtins
         builtins.print = __builtins__.print
         return f"Error: {e}"
 
